@@ -16,7 +16,7 @@ exercisesSchema.post('save', async function(doc, next) {
         const update = { 
             $inc: {count: 1}, 
             $push: { 
-                log: { description: doc.descripton, duration: doc.duration, date: doc.date }
+                log: { description: doc.description, duration: doc.duration, date: doc.date }
             }
         };
     

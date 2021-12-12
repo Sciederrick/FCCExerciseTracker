@@ -32,7 +32,6 @@ app.post('/api/users', async(req, res) => {
       throw 'invalid username';
     }
   } catch(err) {
-    console.log(err)
     res.json({ error: err });
   }
 });
@@ -51,19 +50,18 @@ app.post('/api/users/:_id/exercises', async(req, res) => {
     const userId = typeof(req.params._id) === 'string' && req.params._id.trim().length > 0 ? req.params._id.trim() : false;
     const description = typeof(req.body.description) === 'string' && req.body.description.trim().length > 0 ? req.body.description.trim() : false;
     const duration = typeof(req.body.duration) === 'string' ? Number(req.body.duration) : false;
-    const date = typeof(req.body.date) === 'string' && req.body.date.trim().length > 0 ? req.body.date.trim() : new Date().toDateString();
+    const date = typeof(req.body.date) === 'string' && req.body.date.trim().length > 0 ? new Date(req.body.date.trim()).toDateString() : new Date().toDateString();
 
     if(!userId) throw 'invalid user id';
     if(!description) throw 'invalid description';
     if(!duration) throw 'invalid duration';
     if(!date) throw 'invalid date';
 
-    let username = await usersModel.find({_id:userId}, 'username').exec();
-    username = username[0].username;
-    if(!username) throw 'unable to get username';
+    let username = await usersModel.find({_id:userId}, '_id username').exec();
+    if(!username[0].username) throw 'unable to get username';
 
     const exercise = new exercisesModel({
-      username: username,
+      username: username[0].username,
       description: description,
       duration: duration,
       date: date
@@ -71,17 +69,25 @@ app.post('/api/users/:_id/exercises', async(req, res) => {
     const newExercise = await exercise.save();
     if(!(newExercise === exercise)) throw 'unable to save exercise';
 
-    exercise._id = userId;
-    res.json(exercise);
+    const response = {
+      _id: username[0].id, 
+      username: username[0].username, 
+      description: newExercise.description, 
+      duration: newExercise.duration, 
+      date: newExercise.date
+    };
+
+    res.json(response);
   } catch(err) {
+    console.log(err)
     res.json({ error: err });
   }
 });
 
 app.get('/api/users/:_id/logs', async(req, res) => {
-  const from = typeof(req.params.from) === 'string' && req.params.from.trim().length > 0 ? req.params.from.trim() : false;
-  const to = typeof(req.params.to) === 'string' && req.params.to.trim().length > 0 ? req.params.to.trim() : false;
-  const limit = typeof(req.params.limit) === 'number' ? req.params.limit : false;
+  const from = typeof(req.query.from) === 'string' && req.query.from.trim().length > 0 ? new Date(req.query.from.trim()).toDateString() : false;
+  const to = typeof(req.query.to) === 'string' && req.query.to.trim().length > 0 ? new Date(req.query.to.trim()).toDateString() : false;
+  const limit = typeof(req.query.limit) === 'string' ? Number(req.query.limit) : false;
   const userId = typeof(req.params._id) === 'string' && req.params._id.trim().length > 0 ? req.params._id.trim() : false;
   
   try {
@@ -91,27 +97,21 @@ app.get('/api/users/:_id/logs', async(req, res) => {
     username = username[0].username;
     if(!username) throw 'unable to get username';
   
-    const logs = await logsModel.find({username: username}).exec();
-    res.send(logs);
+    const logs = await logsModel.find({username: username, date: {$gte:from, $lte:to}}).exec();
+    
+    const filteredLogs = logs[0].log.slice(limit*-1);
+    const response = {
+      _id: logs[0]._id.toString(),
+      username: logs[0].username,
+      count: logs[0].count,
+      log: filteredLogs
+    };
+
+    res.send(response);
   } catch(err) {
     res.json({ error: err });
   }
 
-});
-
-app.get('/api/users/:id/logs', async(req, res) => {
-  const userId = typeof(req.params.id) === 'string' && req.params.id.trim().length > 0 ? req.params.id.trim() : false;
-  try {
-    if (!userId) throw 'invalid user id';
-    const username = await usersModel.find({_id: userId}, 'username').exec();
-    if(!username) throw 'unable to fetch username';
-    const logs = await logsModel.find({ username: username }).exec();
-    if (!logs) throw "didn't find logs under that username";
-
-    res.json(logs);
-  } catch (err) {
-    res.json({ error: err });
-  }
 });
 
 const listener = app.listen(process.env.PORT || 3000, () => {
